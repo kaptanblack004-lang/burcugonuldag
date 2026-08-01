@@ -1,4 +1,4 @@
-const BASE = "/api";
+const BASE = "https://burcugonuldag.serveousercontent.com/api";
 
 function getToken() {
   return localStorage.getItem("eas_token");
