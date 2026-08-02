@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const db = require("./db");
@@ -217,6 +218,12 @@ app.delete("/api/admin/users/:username", authMiddleware, adminOnly, (req, res) =
   if (result.error === "not_found") return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   if (result.error === "is_admin") return res.status(400).json({ error: "Yönetici hesabı silinemez." });
   res.json({ ok: true });
+});
+
+const clientDist = path.join(__dirname, "..", "client", "dist");
+app.use(express.static(clientDist));
+app.get(/^\/(?!api).*/, (req, res) => {
+  res.sendFile(path.join(clientDist, "index.html"));
 });
 
 app.listen(PORT, "0.0.0.0", () => {

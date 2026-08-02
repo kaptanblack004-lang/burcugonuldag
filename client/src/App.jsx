@@ -264,10 +264,6 @@ function LoginView({ onSuccess }) {
             </form>
           </div>
         </div>
-
-        <p className="stagger-in text-center text-[10px] text-[#c48aa6] mt-6" style={{ animationDelay: "0.4s" }}>
-          Her giriş denemesi zaman damgası, IP ve cihaz bilgisiyle kayıt altına alınır.
-        </p>
       </div>
     </div>
   );
