@@ -175,7 +175,7 @@ function LoginView({ onSuccess }) {
               className="text-xl font-semibold text-[#7a4560] mb-1 relative"
               style={{ fontFamily: "'Quicksand', 'Inter', system-ui, sans-serif" }}
             >
-              Çalışan Girişi
+              
             </h1>
             <p className="text-sm text-[#b382a0] mb-6 relative">Devam etmek için bilgilerini gir 🌸</p>
 

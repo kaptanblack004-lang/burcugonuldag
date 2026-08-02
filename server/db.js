@@ -1,5 +1,3 @@
-// Saf JavaScript, dosya tabanlı basit veritabanı (native derleme gerektirmez).
-// Bu yüzden Termux/Android dahil her Node.js ortamında sorunsuz çalışır.
 const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
@@ -9,33 +7,22 @@ function readData() {
   if (!fs.existsSync(DATA_FILE)) {
     return {
       users: [],
-      loginLogs: [],
-      services: [],
-      orders: [],
-      balanceRequests: [],
+      logs: [],
       nextUserId: 1,
       nextLogId: 1,
-      nextServiceId: 1,
-      nextOrderId: 1,
-      nextRequestId: 1,
     };
   }
   const d = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
-  // eski data.json dosyalarıyla uyumluluk için eksik alanları tamamla
-  d.services = d.services || [];
-  d.orders = d.orders || [];
-  d.balanceRequests = d.balanceRequests || [];
-  d.nextServiceId = d.nextServiceId || 1;
-  d.nextOrderId = d.nextOrderId || 1;
-  d.nextRequestId = d.nextRequestId || 1;
-  d.users = d.users.map((u) => ({ balance: 0, ...u }));
+  d.logs = d.logs || [];
+  d.users = (d.users || []).map((u) => ({ balance: 0, ...u }));
   return d;
 }
+
 function writeData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
 
-// ---------- ilk kurulum: admin + örnek servisler ----------
+// Varsayılan Admin Hesabı
 let data = readData();
 if (data.users.length === 0) {
   const hash = bcrypt.hashSync("admin123", 10);
@@ -48,25 +35,11 @@ if (data.users.length === 0) {
     balance: 0,
     created_at: Date.now(),
   });
-  console.log("Varsayılan admin oluşturuldu -> kullanıcı adı: admin | şifre: admin123 (giriş yaptıktan sonra değiştirin)");
-}
-if (data.services.length === 0) {
-  const seed = [
-    { category: "Takipçi", name: "Instagram Takipçi", price_per_1000: 45, min: 100, max: 50000 },
-    { category: "Beğeni", name: "Instagram Beğeni", price_per_1000: 18, min: 50, max: 20000 },
-    { category: "İzlenme", name: "Instagram Reels İzlenme", price_per_1000: 6, min: 500, max: 200000 },
-    { category: "Yorum", name: "Instagram Özel Yorum", price_per_1000: 350, min: 10, max: 500 },
-    { category: "Takipçi", name: "TikTok Takipçi", price_per_1000: 55, min: 100, max: 50000 },
-    { category: "Beğeni", name: "TikTok Beğeni", price_per_1000: 15, min: 50, max: 50000 },
-  ];
-  for (const s of seed) {
-    data.services.push({ id: data.nextServiceId++, ...s, active: true, created_at: Date.now() });
-  }
 }
 writeData(data);
 
 const db = {
-  // ---------- kullanıcılar ----------
+  // ---------- Kullanıcılar ----------
   findUserByUsername(username) {
     const d = readData();
     return d.users.find((u) => u.username === username) || null;
@@ -91,14 +64,6 @@ const db = {
     writeData(d);
     return { ok: true };
   },
-  adjustBalance(userId, amount) {
-    const d = readData();
-    const u = d.users.find((u) => u.id === userId);
-    if (!u) return { error: "not_found" };
-    u.balance = Math.round(((u.balance || 0) + amount) * 100) / 100;
-    writeData(d);
-    return { ok: true, balance: u.balance };
-  },
   getUserById(id) {
     const d = readData();
     const u = d.users.find((u) => u.id === id);
@@ -107,121 +72,33 @@ const db = {
     return rest;
   },
 
-  // ---------- giriş logları ----------
+  // ---------- Giriş Logları ----------
   addLoginLog(entry) {
     const d = readData();
-    d.loginLogs.push({ id: d.nextLogId++, ...entry });
-    if (d.loginLogs.length > 500) d.loginLogs = d.loginLogs.slice(-500);
+    if (!d.logs) d.logs = [];
+    d.logs.push({ id: d.nextLogId++, ...entry });
+    if (d.logs.length > 500) d.logs = d.logs.slice(-500);
     writeData(d);
   },
   getRecentLogsForUsername(username, sinceTimestamp) {
     const d = readData();
-    return d.loginLogs
+    return (d.logs || [])
       .filter((l) => l.username_attempt === username && l.timestamp > sinceTimestamp)
       .sort((a, b) => b.timestamp - a.timestamp);
   },
   getAllLogs() {
     const d = readData();
-    return [...d.loginLogs].sort((a, b) => b.timestamp - a.timestamp).slice(0, 500);
+    return [...(d.logs || [])].sort((a, b) => b.timestamp - a.timestamp).slice(0, 500);
   },
 
-  // ---------- servisler (paketler) ----------
-  getServices() {
-    const d = readData();
-    return d.services.filter((s) => s.active !== false);
-  },
-  getAllServicesAdmin() {
-    const d = readData();
-    return d.services;
-  },
-  addService(svc) {
-    const d = readData();
-    d.services.push({ id: d.nextServiceId++, active: true, created_at: Date.now(), ...svc });
-    writeData(d);
-    return { ok: true };
-  },
-  deleteService(id) {
-    const d = readData();
-    d.services = d.services.filter((s) => s.id !== id);
-    writeData(d);
-    return { ok: true };
-  },
-  getServiceById(id) {
-    const d = readData();
-    return d.services.find((s) => s.id === id) || null;
-  },
-
-  // ---------- siparişler ----------
-  createOrder({ user_id, service_id, link, quantity, price }) {
-    const d = readData();
-    const order = {
-      id: d.nextOrderId++,
-      user_id,
-      service_id,
-      link,
-      quantity,
-      price,
-      status: "beklemede",
-      created_at: Date.now(),
-    };
-    d.orders.push(order);
-    writeData(d);
-    return order;
-  },
-  getOrdersForUser(user_id) {
-    const d = readData();
-    return d.orders.filter((o) => o.user_id === user_id).sort((a, b) => b.created_at - a.created_at);
-  },
-  getAllOrders() {
-    const d = readData();
-    return [...d.orders].sort((a, b) => b.created_at - a.created_at);
-  },
-  updateOrderStatus(id, status) {
-    const d = readData();
-    const o = d.orders.find((o) => o.id === id);
-    if (!o) return { error: "not_found" };
-    o.status = status;
-    writeData(d);
-    return { ok: true };
-  },
-
-  // ---------- bakiye talepleri (manuel yükleme) ----------
-  createBalanceRequest({ user_id, amount, method, note }) {
-    const d = readData();
-    const reqObj = {
-      id: d.nextRequestId++,
-      user_id,
-      amount,
-      method,
-      note: note || "",
-      status: "beklemede",
-      created_at: Date.now(),
-    };
-    d.balanceRequests.push(reqObj);
-    writeData(d);
-    return reqObj;
-  },
-  getBalanceRequestsForUser(user_id) {
-    const d = readData();
-    return d.balanceRequests.filter((r) => r.user_id === user_id).sort((a, b) => b.created_at - a.created_at);
-  },
-  getAllBalanceRequests() {
-    const d = readData();
-    return [...d.balanceRequests].sort((a, b) => b.created_at - a.created_at);
-  },
-  resolveBalanceRequest(id, approve) {
-    const d = readData();
-    const r = d.balanceRequests.find((r) => r.id === id);
-    if (!r) return { error: "not_found" };
-    if (r.status !== "beklemede") return { error: "already_resolved" };
-    r.status = approve ? "onaylandı" : "reddedildi";
-    if (approve) {
-      const u = d.users.find((u) => u.id === r.user_id);
-      if (u) u.balance = Math.round(((u.balance || 0) + r.amount) * 100) / 100;
-    }
-    writeData(d);
-    return { ok: true };
-  },
+  // ---------- Boşaltılan Servis/Sipariş Stub'ları ----------
+  getServices() { return []; },
+  getAllServicesAdmin() { return []; },
+  getServiceById() { return null; },
+  getOrdersForUser() { return []; },
+  getAllOrders() { return []; },
+  getBalanceRequestsForUser() { return []; },
+  getAllBalanceRequests() { return []; }
 };
 
 module.exports = db;
