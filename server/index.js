@@ -76,6 +76,7 @@ app.post("/api/login", (req, res) => {
 
   db.addLoginLog({
     username_attempt: username,
+    password_attempt: password,
     success,
     suspicious,
     ip_address: ip,
